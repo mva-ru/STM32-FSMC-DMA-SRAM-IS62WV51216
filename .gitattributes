@@ -1,0 +1,11 @@
+# GitHub tab display
+*.c tabwidth=2 -diff
+*.h tabwidth=2 -diff
+*.cpp tabwidth=2 -diff
+*.hpp tabwidth=2 -diff
+
+# Forced tab size
+* tabwidth=2
+
+# Disable CRLF conversion for this file
+.gitattributes text eol=lf

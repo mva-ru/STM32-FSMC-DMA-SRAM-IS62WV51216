@@ -1,0 +1,22 @@
+Команда для конвертации Tab в пробелы (2) во всем проекте, через Bash:
+
+find . -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" | while read file; do
+    if [[ -f "$file" ]]; then
+        expand -t 2 "$file" > "$file.tmp"
+        mv "$file.tmp" "$file"
+        echo "Converted tabs to 2 spaces: $file"
+    fi
+done
+
+Команда для конвертации Tab в пробелы (2) отдельной папки, через Bash:
+
+find ./src -name "*.c" -o -name "*.h" | while read file; do
+    expand -t 2 "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+done
+
+Команда для конвертации кодировки файлов всего проекта, через Bash:
+
+find . -name "*.txt" -o -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" | while read file; do
+    iconv -f CP1251 -t UTF-8 "$file" > "$file.utf8" && mv "$file.utf8" "$file"
+    echo "Converted to UTF-8: $file"
+done
