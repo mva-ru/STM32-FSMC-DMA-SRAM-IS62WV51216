@@ -265,34 +265,45 @@ typedef enum {
   IS62WV51216_FSMC_BUS_SIZE_8 = 0U, 
   IS62WV51216_FSMC_BUS_SIZE_16,     
   IS62WV51216_FSMC_BUS_SIZE_32,
+	
 } IS62WV51216_FSMC_e_bus_s; // (bus size)
 
 /**
-  * @brief Номера объектов управления дисплеями
+  * @brief Номера объектов управления
   */
 typedef enum {
   IS62WV51216_NUM_DRV_1 = 0U,       
   IS62WV51216_NUM_DRV_2,        
   IS62WV51216_NUM_DRV_3,
   IS62WV51216_NUM_DRV_4,
-  IS62WV51216_NUM_DRV_5,
-  IS62WV51216_NUM_DRV_6,
-  IS62WV51216_NUM_DRV_7,
-  IS62WV51216_NUM_DRV_8,
-  IS62WV51216_NUM_DRV_9
+
 } IS62WV51216_e_nums_drvs; // (numbers drivers)
 
 /**
-  * @brief Состояния дисплея
+  * @brief Состояния модуля
   */
 typedef enum {
   IS62WV51216_STATE_INIT = 0U, 
-  IS62WV51216_STATE_NORMAL,
-//  IS62WV51216_STATE_ERR_,
+	IS62WV51216_STATE_INIT_OK,
+  IS62WV51216_STATE_INIT_ERR,
+	IS62WV51216_STATE_INIT_DMA,
+	IS62WV51216_STATE_INIT_DMA_OK,
+	IS62WV51216_STATE_INIT_DMA_ERR,
+	IS62WV51216_STATE_DMA_TX_OK,
+	IS62WV51216_STATE_DMA_TX_ERR,
+	IS62WV51216_STATE_RW_BYTE,
+	IS62WV51216_STATE_RW_BYTE_OK,
+	IS62WV51216_STATE_RW_BYTE_ERR,
+	IS62WV51216_STATE_RW_BYTE_BUSY,
+	IS62WV51216_STATE_RW_DATA,
+	IS62WV51216_STATE_RW_DATA_OK,
+	IS62WV51216_STATE_RW_DATA_ERR,
+	IS62WV51216_STATE_RW_DATA_BUSY,	
+	
 } IS62WV51216_e_state;
   
 /**
-  * @brief Параметры для работы с дисплеем
+  * @brief Параметры для работы с шиной
   */
 typedef struct {
   //--параметры для работы по шине FSMC
@@ -308,7 +319,7 @@ typedef struct {
 #endif
   
   //--общие  
-  IS62WV51216_e_state         state;        // состояние дисплея
+  IS62WV51216_e_state         state;        // состояние модуля
   u32                         adr:19;       // последнее значение адреса для чтения\записи (19 бит)
   u16                         data;         // последнее значение данных для чтения\записи (16 бит)
 #if IS62WV51216_BUFFER

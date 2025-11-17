@@ -96,11 +96,13 @@ bool IS62WV51216_Init(u8 n_drv, SRAM_HandleTypeDef* hsram, bool fl_dma){
   IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->Init() - Size RAM: %lu KBytes\n", n_drv, (long)IS62WV51216_SIZE_KBYTES);
   IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->Init() - Size RAM: %lu HWords\n", n_drv, (long)IS62WV51216_SIZE_HALF_WORDS);
   IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->Init() - OK\n", n_drv);
+	_drv[n_drv].state = IS62WV51216_STATE_INIT_OK;
   IS62WV51216_Check_Connection(n_drv);
   return true;
 
 #if IS62WV51216_CHECK_FUNCTION
 error:
+	_drv[n_drv].state = IS62WV51216_STATE_INIT_ERR;
   _drv[n_drv].cnt_err_fn_data++;
   return false;
 #endif
@@ -115,6 +117,7 @@ error:
   */
 bool IS62WV51216_DMA_Init(u8 n_drv, SRAM_HandleTypeDef* hsram)
 {
+	_drv[n_drv].state = IS62WV51216_STATE_INIT_DMA;
   IRQn_Type irq_number;
   
 #if IS62WV51216_CHECK_FUNCTION
@@ -159,24 +162,24 @@ bool IS62WV51216_DMA_Init(u8 n_drv, SRAM_HandleTypeDef* hsram)
   //------------------------------------------------
   if(HAL_DMA_Init(hsram->hdma) != HAL_OK){
     IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->DMA_Init() - ERROR: DMA_Init()\n", n_drv);
-    return false;
+		goto error;
   }
   if(HAL_DMA_RegisterCallback(hsram->hdma, HAL_DMA_XFER_CPLT_CB_ID, IS62WV51216_DMA_Transfer_Complete) != HAL_OK ||
      HAL_DMA_RegisterCallback(hsram->hdma, HAL_DMA_XFER_ERROR_CB_ID, IS62WV51216_DMA_Transfer_Error) != HAL_OK){
     IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->DMA_Init() - ERROR: DMA_RegisterCallback()", n_drv);
-    return false;
+		goto error;
   }// Настройка прерываний для конкретного потока
   irq_number = IS62WV51216_Get_DMA_Stream_IRQ(IS62WV51216_DMA_STREAM);
   HAL_NVIC_SetPriority(irq_number, 0, 0);
   HAL_NVIC_EnableIRQ(irq_number); 
   IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->DMA_Init() - OK\n", n_drv);
+	_drv[n_drv].state = IS62WV51216_STATE_INIT_DMA_OK;
   return true;
-  
-#if IS62WV51216_CHECK_FUNCTION
+	
 error:
+	_drv[n_drv].state = IS62WV51216_STATE_INIT_DMA_ERR;
   _drv[n_drv].cnt_err_fn_data++;
   return false;
-#endif
 }
 
 /**
@@ -266,6 +269,7 @@ void IS62WV51216_DMA_Transfer_Complete(DMA_HandleTypeDef *hdma)
 #endif    
       _drv[n_drv].hsram->State = HAL_SRAM_STATE_READY;
       IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->DMA_Transfer_Complete() - OK\n", n_drv);
+			_drv[n_drv].state = IS62WV51216_STATE_DMA_TX_OK;
       break;
     }
     n_drv++;
@@ -291,6 +295,7 @@ void IS62WV51216_DMA_Transfer_Error(DMA_HandleTypeDef *hdma)
       _drv[n_drv].cnt_err_dma++;
       _drv[n_drv].hsram->State = HAL_SRAM_STATE_READY;
       IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->DMA_Transfer_Error() - ERROR\n", n_drv);
+			_drv[n_drv].state = IS62WV51216_STATE_DMA_TX_ERR;
       break;
     }
     n_drv++;
@@ -314,9 +319,8 @@ bool IS62WV51216_Rw_Byte(u8 n_drv, u32 adr, u8* data, bool fl_rw, bool fl_sb)
 {
 #if IS62WV51216_DEBUG
   static char s_rw[5], s_sb[2];
-#endif
-  
-#if IS62WV51216_DEBUG
+	_drv[n_drv].state = IS62WV51216_STATE_RW_BYTE;
+
   if(fl_rw == IS62WV51216_READ)
     strcpy(s_rw, "Read ");
   else
@@ -328,7 +332,27 @@ bool IS62WV51216_Rw_Byte(u8 n_drv, u32 adr, u8* data, bool fl_rw, bool fl_sb)
     strcpy(s_sb, "Hi");
   IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->Software_%s_Byte_%s(adr:0x%02X) - START\n", n_drv, s_rw, s_sb, adr);
 #endif
-  
+	
+#if IS62WV51216_CHECK_FUNCTION
+  if(n_drv >= IS62WV51216_N_DRIVERS){
+    IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->RW_Data(0x%02X) - ERROR: n_drv >= IS62WV51216_N_DRIVERS\n", n_drv, adr);
+    goto error;
+  }
+  if(adr >= IS62WV51216_SIZE_HALF_WORDS || 
+    (adr > IS62WV51216_SIZE_HALF_WORDS)){
+    IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->RW_Data(0x%02X) - ERROR: adr || size\n", n_drv, adr);
+    goto error;   
+  };
+  if(!data){
+    IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->RW_Data(0x%02X) - ERROR: data* == NULL", n_drv, adr);
+    goto error;
+  }
+#endif	
+  if(_drv[n_drv].hsram->State != HAL_SRAM_STATE_READY){
+    IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->RW_Data(0x%02X) - ERROR: State != HAL_SRAM_STATE_READY\n", n_drv, adr);
+		_drv[n_drv].state = IS62WV51216_STATE_RW_BYTE_BUSY;
+    return false;   
+  }; 
 #if IS62WV51216_FSMC_BIT_DETH == IS62WV51216_FSMC_DATA_16_BIT
   
 #if !IS62WV51216_SOFTWARE_LB_UB
@@ -386,11 +410,20 @@ bool IS62WV51216_Rw_Byte(u8 n_drv, u32 adr, u8* data, bool fl_rw, bool fl_sb)
 #endif // #if IS62WV51216_FSMC_BIT_DETH == IS62WV51216_FSMC_DATA_16_BIT
   
   IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->Software_%s_Byte_%s(adr:0x%02X) - ERROR\n", n_drv, s_rw, s_sb, adr);
+	_drv[n_drv].state = IS62WV51216_STATE_RW_BYTE_ERR;
   return false;
   
   ok:
   IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->Software_%s_Byte_%s(adr:0x%02X) - OK\n", n_drv, s_rw, s_sb, adr);
+	_drv[n_drv].state = IS62WV51216_STATE_RW_BYTE_OK;
   return true;
+	
+#if IS62WV51216_CHECK_FUNCTION
+	error:
+	_drv[n_drv].state = IS62WV51216_STATE_RW_BYTE_ERR;
+  _drv[n_drv].cnt_err_fn_data++;
+  return false;
+#endif	
 }
 
 /**
@@ -409,6 +442,7 @@ bool IS62WV51216_Rw_Data(u8 n_drv, u32 adr, u16* data, u32 size, bool fl_rw, boo
 {
 #if IS62WV51216_DEBUG
   static char s_rw[5];
+	_drv[n_drv].state = IS62WV51216_STATE_RW_DATA;
 #endif
   
 #if IS62WV51216_CHECK_FUNCTION
@@ -428,6 +462,7 @@ bool IS62WV51216_Rw_Data(u8 n_drv, u32 adr, u16* data, u32 size, bool fl_rw, boo
 #endif
   if(_drv[n_drv].hsram->State != HAL_SRAM_STATE_READY){
     IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->RW_Data(0x%02X) - ERROR: State != HAL_SRAM_STATE_READY\n", n_drv, adr);
+		_drv[n_drv].state = IS62WV51216_STATE_RW_DATA_BUSY;
     return false;   
   };
 #if IS62WV51216_DEBUG
@@ -475,14 +510,17 @@ bool IS62WV51216_Rw_Data(u8 n_drv, u32 adr, u16* data, u32 size, bool fl_rw, boo
       IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->RW_Data_%s(adr:0x%02X) - DMA->Idle\n", n_drv, s_rw, adr);
     }else{
       IS62WV51216_DEBUG_PRINTF("IS62WV51216(%02d)->RW_Data_%s(adr:0x%02X) - DMA->ERROR: Start_IT()\n", n_drv, s_rw, adr);
+			_drv[n_drv].state = IS62WV51216_STATE_RW_BYTE_ERR;
       return false;
     }
   }
 #endif
+	_drv[n_drv].state = IS62WV51216_STATE_RW_BYTE_OK;
   return true;
   
 #if IS62WV51216_CHECK_FUNCTION
-error:
+	error:
+	_drv[n_drv].state = IS62WV51216_STATE_RW_BYTE_ERR;
   _drv[n_drv].cnt_err_fn_data++;
   return false;
 #endif
@@ -496,7 +534,7 @@ error:
 bool IS62WV51216_Check_Connection(u8 n_drv)
 {
   u8 n_once = 3;
-  
+
   while(n_once > 0){
     _drv[n_drv].data = IS62WV51216_TEST_CONNECTION_DATA;
     
